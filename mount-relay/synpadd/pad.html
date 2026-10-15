@@ -1,0 +1,57 @@
+<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>镜控手柄</title>
+<style>
+body{background:#111;color:#eee;font-family:sans-serif;margin:0;padding:16px;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+#pos{font-size:14px;color:#9f9;margin:6px 0 10px;white-space:pre-wrap}
+.grid{display:grid;grid-template-columns:repeat(3,90px);grid-template-rows:repeat(3,90px);gap:10px;justify-content:center}
+button{font-size:34px;border-radius:14px;border:1px solid #444;background:#262626;color:#eee}
+button:active{background:#555}
+#stop{background:#a11;border-color:#f55;color:#fff;font-size:22px;width:100%;padding:14px;margin-top:14px}
+.spd{display:flex;gap:10px;justify-content:center;margin-top:14px}
+.spd button{font-size:16px;padding:10px 18px}
+.lim{display:flex;gap:10px;justify-content:center;margin-top:10px}
+.lim button{font-size:14px;padding:8px 14px}
+#msg{color:#f66;text-align:center;height:22px;margin-top:8px}
+</style></head><body>
+<div id="pos">…</div>
+<div class="grid">
+<button></button><button data-a="2" data-d="0">▲</button><button></button>
+<button data-a="1" data-d="1">◀</button><button data-a="" disabled>·</button><button data-a="1" data-d="0">▶</button>
+<button></button><button data-a="2" data-d="1">▼</button><button></button>
+</div>
+<div id="msg"></div>
+<button id="stop">■ 停</button>
+<div class="spd">
+<button data-s="slow">慢</button><button data-s="mid" style="background:#3a5">中</button><button data-s="fast">快</button>
+</div>
+<div class="lim">
+<button data-w="lo">记录下限(当前)</button><button data-w="hi">记录上限(当前)</button>
+</div>
+<script>
+const msg=document.getElementById('msg'),posEl=document.getElementById('pos');
+function press(a,d){fetch('/press?axis='+a+'&dir='+d).then(r=>r.text()).then(t=>{if(t==='LIMIT')msg.textContent='到限位了!';else if(t!=='ok'&&t!=='held')msg.textContent='错误:'+t;});}
+function release(a){fetch('/release?axis='+a);}
+document.querySelectorAll('button[data-a]').forEach(b=>{
+  const a=b.dataset.a,d=b.dataset.d;
+  b.addEventListener('pointerdown',e=>{e.preventDefault();press(a,d);});
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=>b.addEventListener(ev,()=>release(a)));
+});
+document.getElementById('stop').onclick=()=>{fetch('/stop');msg.textContent='';};
+document.querySelectorAll('button[data-s]').forEach(b=>b.onclick=()=>{fetch('/speed?s='+b.dataset.s);
+  document.querySelectorAll('button[data-s]').forEach(x=>x.style.background='#262626');b.style.background='#3a5';});
+document.querySelectorAll('button[data-w]').forEach(b=>b.onclick=()=>fetch('/setlimit?w='+b.dataset.w).then(r=>r.text()).then(t=>msg.textContent='限位:'+t));
+async function poll(){try{const[ra,dec]=(await(await fetch('/pos')).text()).split(' ');
+const f=v=>(v*360/16777216).toFixed(1);
+posEl.textContent=`RA ${f(ra)}°  (raw ${ra})\nDEC ${f(dec)}°  (raw ${dec})`;}catch(e){posEl.textContent='连接断开';}}
+setInterval(poll,800);poll();
+// 键盘方向键支持
+const held_keys={};
+addEventListener('keydown',e=>{if(held_keys[e.key])return;held_keys[e.key]=1;
+ if(e.key==='ArrowUp')press(2,0);if(e.key==='ArrowDown')press(2,1);
+ if(e.key==='ArrowLeft')press(1,1);if(e.key==='ArrowRight')press(1,0);
+ if(e.key===' ')fetch('/stop');});
+addEventListener('keyup',e=>{delete held_keys[e.key];
+ if(e.key==='ArrowUp'||e.key==='ArrowDown')release(2);
+ if(e.key==='ArrowLeft'||e.key==='ArrowRight')release(1);});
+</script></body></html>
